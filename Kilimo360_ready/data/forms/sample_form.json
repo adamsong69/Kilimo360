@@ -1,0 +1,16 @@
+{
+  "name": "sample_survey",
+  "title": "Sample Survey",
+  "questions": [
+    {
+      "type": "text",
+      "name": "farmer_name",
+      "label": "Farmer name"
+    },
+    {
+      "type": "number",
+      "name": "acreage",
+      "label": "Acreage"
+    }
+  ]
+}
