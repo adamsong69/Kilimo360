@@ -9,67 +9,54 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ANDROID_API: 33
-      ANDROID_MIN_API: 21
-      ANDROID_NDK: r25b
+      ANDROID_HOME: $HOME/android-sdk
+      ANDROID_SDK_ROOT: $HOME/android-sdk
       JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
 
     steps:
-    - name: Checkout repository
+    - name: Checkout
       uses: actions/checkout@v3
 
-    - name: Set Project Directory
-      id: set_project_dir
+    - name: Locate project folder
       run: |
-        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1 | sed 's|^\./||')
+        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1)
         echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         echo "Project folder: $PROJECT_DIR"
 
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.11'
+        python-version: "3.11"
 
-    - name: Install dependencies
+    - name: Install pip dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install cython==3.2.1
-        pip install buildozer==1.5.0 python-for-android==2024.1.21
+        pip install --upgrade pip
+        pip install cython buildozer python-for-android
 
-    - name: Prepare icons/presplash
+    - name: Install Android Command-line Tools
       run: |
-        cd ${{ env.PROJECT_DIR }}
-        echo "Checking icons/presplash..."
-        if [ -f "./assets/default_icon.png" ]; then
-          echo "Icon exists, OK"
-        else
-          echo "No icon found, skipping."
-        fi
-        if [ -f "./assets/default_presplash.png" ]; then
-          echo "Presplash exists, OK"
-        else
-          echo "No presplash found, skipping."
-        fi
-
-    - name: Install Android Command-Line Tools
-      run: |
-        mkdir -p $HOME/android-sdk/cmdline-tools
-        cd $HOME/android-sdk/cmdline-tools
-        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-        unzip -q cmdline-tools.zip
+        mkdir -p $ANDROID_HOME/cmdline-tools
+        cd $ANDROID_HOME/cmdline-tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O tools.zip
+        unzip -q tools.zip
         mv cmdline-tools latest
-        export ANDROID_HOME=$HOME/android-sdk
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
 
-        # Accept licenses automatically
-        yes | sdkmanager --licenses
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
 
-        # Install essential SDK packages
-        sdkmanager "platform-tools" "platforms;android-33" "build-tools;36.1.0"
+        # FIRST license pass
+        yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
+
+        # Install ONLY stable versions p4a supports
+        sdkmanager --sdk_root=$ANDROID_HOME \
+          "platform-tools" \
+          "build-tools;34.0.0" \
+          "platforms;android-33"
+
+        # SECOND license pass (Google requires double accept for new packages)
+        yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
 
     - name: Build APK
       run: |
         cd ${{ env.PROJECT_DIR }}
-        export ANDROID_HOME=$HOME/android-sdk
         export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
         buildozer android debug
