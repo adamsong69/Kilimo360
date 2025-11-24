@@ -27,11 +27,12 @@ jobs:
           python -m pip install --upgrade buildozer==1.5.0 python-for-android==2024.1.21
 
       - name: Find project directory
-        id: find_proj
-        run: |
-          PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \;)
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-          echo "Project folder: $PROJECT_DIR"
+  id: find_proj
+  run: |
+    PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1)
+    echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+    echo "Project folder: $PROJECT_DIR"
+
 
       - name: Create virtual environment
         run: python -m venv ${{ env.PROJECT_DIR }}/venv
