@@ -1,4 +1,4 @@
-name: Android Build
+name: Build APK
 
 on:
   push:
@@ -8,45 +8,51 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
-    env:
-      ANDROIDSDK_ROOT: ${{ github.workspace }}/android-sdk
-      ANDROIDNDK_ROOT: ${{ github.workspace }}/android-ndk
-      P4A_STORAGE_DIR: ${{ github.workspace }}/.p4a
+    runs-on: ubuntu-22.04
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: 3.10
+          python-version: '3.10'
 
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade buildozer python-for-android==2024.1.21
+          python -m pip install --upgrade buildozer==1.5.0 python-for-android==2024.1.21
 
-      - name: Find project folder
-        id: project
+      - name: Find project directory
+        id: find_proj
         run: |
           PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \;)
-          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
+          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          echo "Project folder: $PROJECT_DIR"
 
-      - name: List project folder
-        run: ls ${{ steps.project.outputs.project_dir }}
+      - name: Create virtual environment
+        run: python -m venv ${{ env.PROJECT_DIR }}/venv
+
+      - name: Activate venv & install requirements
+        run: |
+          source ${{ env.PROJECT_DIR }}/venv/bin/activate
+          pip install --upgrade pip
+          if [ -f ${{ env.PROJECT_DIR }}/requirements.txt ]; then
+            pip install -r ${{ env.PROJECT_DIR }}/requirements.txt
+          fi
 
       - name: Build APK
-        working-directory: ${{ steps.project.outputs.project_dir }}
+        working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          buildozer android debug
+          source venv/bin/activate
+          buildozer -v android debug
 
-      - name: Upload APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Kilimo360-APK
-          path: ${{ steps.project.outputs.project_dir }}/bin/*.apk
+          path: ${{ env.PROJECT_DIR }}/bin/*.apk
+
