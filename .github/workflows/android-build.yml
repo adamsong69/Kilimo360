@@ -29,9 +29,15 @@ jobs:
             libsqlite3-dev libgdbm-dev libbz2-dev liblzma-dev \
             curl wget pkg-config
 
-      - name: Create venv & install build tools
+      - name: Create venv
+        working-directory: ${{ github.workspace }}
         run: |
           python -m venv venv
+          ls -la venv
+
+      - name: Install build tools
+        working-directory: ${{ github.workspace }}
+        run: |
           source venv/bin/activate
           pip install --upgrade pip setuptools wheel
           pip install Cython==0.29.36
@@ -39,6 +45,7 @@ jobs:
           pip install python-for-android==2024.1.21
 
       - name: Ensure buildozer.spec exists
+        working-directory: ${{ github.workspace }}
         run: |
           if [ ! -f buildozer.spec ]; then
             echo "ERROR: buildozer.spec missing!" >&2
@@ -46,6 +53,7 @@ jobs:
           fi
 
       - name: Build APK
+        working-directory: ${{ github.workspace }}
         run: |
           source venv/bin/activate
           buildozer -v android debug
