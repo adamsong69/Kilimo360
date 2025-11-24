@@ -2,39 +2,98 @@ name: Build Kilimo360 APK
 
 on:
   push:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/android-sdk
+      PATH: ${{ github.workspace }}/android-sdk/cmdline-tools/latest/bin:${{ github.workspace }}/android-sdk/platform-tools:$PATH
+
     steps:
+    # -------------------------------
+    # Checkout repository
+    # -------------------------------
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Set Project Directory
-      id: set_project_dir
+    # -------------------------------
+    # Install system dependencies
+    # -------------------------------
+    - name: Install system packages
       run: |
-        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1 | sed 's|^\./||')
-        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-        echo "Project folder: $PROJECT_DIR"
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3 python3-pip python3-setuptools python3-wheel \
+          git unzip zip openjdk-17-jdk libffi-dev libssl-dev \
+          autoconf automake libtool pkg-config wget curl
 
-    - name: Pull Kivy Buildozer Docker
+    # -------------------------------
+    # Install Python packages
+    # -------------------------------
+    - name: Install Python tools
       run: |
-        docker pull kivy/buildozer:latest
+        pip install --upgrade pip
+        pip install cython buildozer python-for-android
 
-    - name: Build APK using Docker
+    # -------------------------------
+    # Setup Android SDK, NDK, cmdline-tools
+    # -------------------------------
+    - name: Install Android SDK + cmdline-tools + NDK
       run: |
-        docker run --rm \
-          -v ${{ github.workspace }}/${{ env.PROJECT_DIR }}:/home/user/hostcwd \
-          -w /home/user/hostcwd \
-          kivy/buildozer:latest \
-          sh -c "buildozer android debug"
+        mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
 
-    - name: Upload Kilimo360 APK
+        cd $ANDROID_SDK_ROOT/cmdline-tools
+
+        # Download command line tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
+        unzip -q tools.zip
+        rm tools.zip
+
+        # Fix folder structure required by sdkmanager
+        mkdir -p latest
+        mv cmdline-tools/* latest/ || true
+        rm -rf cmdline-tools
+
+        # Accept licenses for SDK packages
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+        # Install required SDK/NDK packages
+        $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+          "platform-tools" \
+          "build-tools;36.1.0" \
+          "platforms;android-34" \
+          "ndk;25.1.8937393" \
+          --verbose
+
+    # -------------------------------
+    # Verify environment variables
+    # -------------------------------
+    - name: Print environment info
+      run: |
+        java -version
+        javac -version
+        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+        echo "PATH=$PATH"
+        which sdkmanager
+        sdkmanager --list
+
+    # -------------------------------
+    # Build APK with Buildozer
+    # -------------------------------
+    - name: Build Kilimo360 APK
+      run: |
+        buildozer android debug
+      env:
+        ANDROIDSDK: ${{ env.ANDROID_SDK_ROOT }}
+
+    # -------------------------------
+    # Upload APK artifact
+    # -------------------------------
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: Kilimo360-apk
-        path: ${{ env.PROJECT_DIR }}/bin/*.apk
+        path: bin/*.apk
