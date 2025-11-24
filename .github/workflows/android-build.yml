@@ -2,79 +2,51 @@ name: Android APK Build
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    # ------------------------------
-    # CHECKOUT SOURCE CODE
-    # ------------------------------
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # ------------------------------
-    # SETUP PYTHON
-    # ------------------------------
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
-
-    - name: Create virtual environment
-      run: python -m venv venv
-
-    - name: Install Python dependencies
+    - name: Install system dependencies
       run: |
-        source venv/bin/activate
-        pip install --upgrade pip
-        pip install buildozer cython==0.29.36
-        pip install -r requirements.txt || true
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3-pip \
+          python3-venv \
+          openjdk-17-jdk \
+          unzip \
+          git \
+          liblzma-dev
 
-    # ------------------------------
-    # INSTALL ANDROID SDK + NDK
-    # ------------------------------
-    - name: Install Android SDK & NDK
+    - name: Install Buildozer
       run: |
-        sudo apt update
-        sudo apt install -y unzip openjdk-17-jdk python3-setuptools git zip
-        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        mkdir -p $HOME/android-sdk/cmdline-tools
-        unzip commandlinetools-linux-9477386_latest.zip -d $HOME/android-sdk/cmdline-tools
-        mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/tools
-        yes | $HOME/android-sdk/cmdline-tools/tools/bin/sdkmanager --sdk_root=$HOME/android-sdk \
-          "platforms;android-33" \
-          "platform-tools" \
-          "build-tools;33.0.2" \
-          "ndk;25.1.8937393"
+        python3 -m pip install --upgrade pip
+        pip install buildozer python-for-android
 
-    # ------------------------------
-    # EXPORT ANDROID ENV VARIABLES
-    # ------------------------------
-    - name: Set Android Environment Variables
+    - name: Enter project folder
       run: |
-        echo "export ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "export ANDROIDNDK=$HOME/android-sdk/ndk/25.1.8937393" >> $GITHUB_ENV
-        echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
-        echo "export PATH=$HOME/android-sdk/build-tools/33.0.2:$PATH" >> $GITHUB_ENV
+        cd Kilimo360_ready
+        echo "Current directory:"
+        pwd
+      working-directory: ./Kilimo360_ready
 
-    # ------------------------------
-    # BUILD ANDROID APK WITH BUILDZOER
-    # ------------------------------
+    - name: Initialize Buildozer
+      run: |
+        buildozer init || true
+      working-directory: ./Kilimo360_ready
+
     - name: Build APK
       run: |
-        source venv/bin/activate
-        buildozer android debug
+        buildozer -v android debug
+      working-directory: ./Kilimo360_ready
 
-    # ------------------------------
-    # UPLOAD APK ARTIFACT
-    # ------------------------------
-    - name: Upload APK Artifact
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: Kilimo360-APK
-        path: bin/*.apk
+        path: Kilimo360_ready/bin/*.apk
