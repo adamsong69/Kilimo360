@@ -1,65 +1,80 @@
-name: Build Android APK
+name: Android APK Build
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    # ------------------------------
+    # CHECKOUT SOURCE CODE
+    # ------------------------------
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
+    # ------------------------------
+    # SETUP PYTHON
+    # ------------------------------
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential git zip unzip openjdk-17-jdk \
-            libffi-dev libssl-dev zlib1g-dev \
-            libncurses5-dev libncursesw5-dev libreadline-dev \
-            libsqlite3-dev libgdbm-dev libbz2-dev liblzma-dev \
-            curl wget pkg-config
+    - name: Create virtual environment
+      run: python -m venv venv
 
-      - name: Create venv
-        working-directory: ${{ github.workspace }}
-        run: |
-          python -m venv venv
-          ls -la venv
+    - name: Install Python dependencies
+      run: |
+        source venv/bin/activate
+        pip install --upgrade pip
+        pip install buildozer cython==0.29.36
+        pip install -r requirements.txt || true
 
-      - name: Install build tools
-        working-directory: ${{ github.workspace }}
-        run: |
-          source venv/bin/activate
-          pip install --upgrade pip setuptools wheel
-          pip install Cython==0.29.36
-          pip install buildozer==1.5.0
-          pip install python-for-android==2024.1.21
+    # ------------------------------
+    # INSTALL ANDROID SDK + NDK
+    # ------------------------------
+    - name: Install Android SDK & NDK
+      run: |
+        sudo apt update
+        sudo apt install -y unzip openjdk-17-jdk python3-setuptools git zip
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        mkdir -p $HOME/android-sdk/cmdline-tools
+        unzip commandlinetools-linux-9477386_latest.zip -d $HOME/android-sdk/cmdline-tools
+        mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/tools
+        yes | $HOME/android-sdk/cmdline-tools/tools/bin/sdkmanager --sdk_root=$HOME/android-sdk \
+          "platforms;android-33" \
+          "platform-tools" \
+          "build-tools;33.0.2" \
+          "ndk;25.1.8937393"
 
-      - name: Ensure buildozer.spec exists
-        working-directory: ${{ github.workspace }}
-        run: |
-          if [ ! -f buildozer.spec ]; then
-            echo "ERROR: buildozer.spec missing!" >&2
-            exit 1
-          fi
+    # ------------------------------
+    # EXPORT ANDROID ENV VARIABLES
+    # ------------------------------
+    - name: Set Android Environment Variables
+      run: |
+        echo "export ANDROIDSDK=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "export ANDROIDNDK=$HOME/android-sdk/ndk/25.1.8937393" >> $GITHUB_ENV
+        echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
+        echo "export PATH=$HOME/android-sdk/build-tools/33.0.2:$PATH" >> $GITHUB_ENV
 
-      - name: Build APK
-        working-directory: ${{ github.workspace }}
-        run: |
-          source venv/bin/activate
-          buildozer -v android debug
+    # ------------------------------
+    # BUILD ANDROID APK WITH BUILDZOER
+    # ------------------------------
+    - name: Build APK
+      run: |
+        source venv/bin/activate
+        buildozer android debug
 
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kilimo360-apk
-          path: bin/*.apk
+    # ------------------------------
+    # UPLOAD APK ARTIFACT
+    # ------------------------------
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kilimo360-APK
+        path: bin/*.apk
