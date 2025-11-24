@@ -31,14 +31,14 @@ jobs:
 
       - name: Create venv & install build tools
         run: |
-          python3.10 -m venv venv
+          python -m venv venv
           source venv/bin/activate
           pip install --upgrade pip setuptools wheel
           pip install Cython==0.29.36
           pip install buildozer==1.5.0
           pip install python-for-android==2024.1.21
 
-      - name: Check buildozer.spec exists
+      - name: Ensure buildozer.spec exists
         run: |
           if [ ! -f buildozer.spec ]; then
             echo "ERROR: buildozer.spec missing!" >&2
@@ -46,13 +46,11 @@ jobs:
           fi
 
       - name: Build APK
-        env:
-          ANDROIDSDK: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
         run: |
           source venv/bin/activate
           buildozer -v android debug
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: kilimo360-apk
