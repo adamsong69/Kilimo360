@@ -1,14 +1,13 @@
-name: Build Kilimo360 APK
+name: Android APK Build
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build-android:
-    runs-on: ubuntu-latest
+  build-apk:
+    runs-on: ubuntu-24.04
 
     env:
       ANDROID_API: 33
@@ -16,36 +15,38 @@ jobs:
       ANDROID_NDK: r25b
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v3
 
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: 3.11
 
-    - name: Install dependencies
+    - name: Install Buildozer and Python-for-Android
       run: |
-        python -m venv venv
-        source venv/bin/activate
         python -m pip install --upgrade pip
         pip install buildozer==1.5.0 python-for-android==2024.1.21
 
-    - name: Locate project directory
+    - name: Locate project folder
       id: project_dir
       run: |
-        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n1)
+        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1)
         echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         echo "Project folder: $PROJECT_DIR"
 
+    - name: Install Android SDK & dependencies
+      run: |
+        buildozer android sdk update
+      working-directory: ${{ env.PROJECT_DIR }}
+
     - name: Build APK
       run: |
-        source venv/bin/activate
-        cd $PROJECT_DIR
         buildozer android debug
+      working-directory: ${{ env.PROJECT_DIR }}
 
-    - name: Upload APK
+    - name: Upload APK artifact
       uses: actions/upload-artifact@v4
       with:
         name: Kilimo360-APK
-        path: ${{ steps.project_dir.outputs.PROJECT_DIR }}/bin/*.apk
+        path: ${{ env.PROJECT_DIR }}/bin/*.apk
