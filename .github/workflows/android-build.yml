@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
@@ -51,14 +51,14 @@ jobs:
           ANDROIDSDK: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
         run: |
           source venv/bin/activate
-          # show versions for debugging
           python --version
           pip show buildozer python-for-android Cython
-          # run buildozer (verbose). This will download SDK/NDK on first run.
           buildozer -v android debug
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kilimo360-apk
           path: bin/*.apk
+          compression-level: 0   # speeds up upload
+
