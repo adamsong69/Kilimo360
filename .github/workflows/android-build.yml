@@ -12,6 +12,7 @@ jobs:
       ANDROID_API: 33
       ANDROID_MIN_API: 21
       ANDROID_NDK: r25b
+      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
 
     steps:
     - name: Checkout repository
@@ -29,38 +30,46 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Buildozer and Dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install cython==0.29.36
+        pip install cython==3.2.1
         pip install buildozer==1.5.0 python-for-android==2024.1.21
 
     - name: Prepare icons/presplash
       run: |
         cd ${{ env.PROJECT_DIR }}
         echo "Checking icons/presplash..."
-        [ -f "./assets/default_icon.png" ] && echo "Icon exists" || echo "No icon, skipping"
-        [ -f "./assets/default_presplash.png" ] && echo "Presplash exists" || echo "No presplash, skipping"
+        if [ -f "./assets/default_icon.png" ]; then
+          echo "Icon exists, OK"
+        else
+          echo "No icon found, skipping."
+        fi
+        if [ -f "./assets/default_presplash.png" ]; then
+          echo "Presplash exists, OK"
+        else
+          echo "No presplash found, skipping."
+        fi
 
-    - name: Install Android SDK and Command-Line Tools
+    - name: Install Android Command-Line Tools
       run: |
-        ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk
-        mkdir -p $ANDROIDSDK/cmdline-tools
-        cd $ANDROIDSDK/cmdline-tools
+        mkdir -p $HOME/android-sdk/cmdline-tools
+        cd $HOME/android-sdk/cmdline-tools
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
         unzip -q cmdline-tools.zip
         mv cmdline-tools latest
-        rm cmdline-tools.zip
+        export ANDROID_HOME=$HOME/android-sdk
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
 
-        export PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$PATH
-
+        # Accept licenses automatically
         yes | sdkmanager --licenses
+
+        # Install essential SDK packages
         sdkmanager "platform-tools" "platforms;android-33" "build-tools;36.1.0"
 
     - name: Build APK
       run: |
         cd ${{ env.PROJECT_DIR }}
-        ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk
-        ANDROIDNDK=$HOME/.buildozer/android/platform/android-ndk-r25b
-        export PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$PATH
-        buildozer android debug --sdk-dir $ANDROIDSDK --ndk-dir $ANDROIDNDK
+        export ANDROID_HOME=$HOME/android-sdk
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+        buildozer android debug
