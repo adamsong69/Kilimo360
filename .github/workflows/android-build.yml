@@ -1,52 +1,59 @@
-name: Android APK Build
+name: Build Kilimo360 APK
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # 1. Checkout the repository
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-    - name: Install system dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          python3-pip \
-          python3-venv \
-          openjdk-17-jdk \
-          unzip \
-          git \
-          liblzma-dev
+      # 2. Find the folder containing buildozer.spec
+      - name: Find project folder
+        id: find_project
+        run: |
+          PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \;)
+          echo "Project folder: $PROJECT_DIR"
+          echo "project_dir=$PROJECT_DIR" >> $GITHUB_OUTPUT
 
-    - name: Install Buildozer
-      run: |
-        python3 -m pip install --upgrade pip
-        pip install buildozer python-for-android
+      # 3. Show folder contents (debug)
+      - name: Show project folder
+        run: |
+          echo "Project directory is ${{ steps.find_project.outputs.project_dir }}"
+          ls -la ${{ steps.find_project.outputs.project_dir }}
 
-    - name: Enter project folder
-      run: |
-        cd Kilimo360_ready
-        echo "Current directory:"
-        pwd
-      working-directory: ./Kilimo360_ready
+      # 4. Install dependencies
+      - name: Install Python and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip python3-venv git openjdk-17-jdk unzip
+        shell: bash
 
-    - name: Initialize Buildozer
-      run: |
-        buildozer init || true
-      working-directory: ./Kilimo360_ready
+      # 5. Create virtual environment
+      - name: Setup venv
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install buildozer python-for-android
+        working-directory: ${{ steps.find_project.outputs.project_dir }}
 
-    - name: Build APK
-      run: |
-        buildozer -v android debug
-      working-directory: ./Kilimo360_ready
+      # 6. Run Buildozer to build APK
+      - name: Build APK
+        run: |
+          source venv/bin/activate
+          buildozer android debug
+        working-directory: ${{ steps.find_project.outputs.project_dir }}
 
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Kilimo360-APK
-        path: Kilimo360_ready/bin/*.apk
+      # 7. Upload APK as artifact
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kilimo360-debug-apk
+          path: ${{ steps.find_project.outputs.project_dir }}/bin/*.apk
