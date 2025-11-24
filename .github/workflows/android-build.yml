@@ -11,34 +11,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # ------------------------------------------------------------
-    # Step 1: Checkout repository
-    # ------------------------------------------------------------
+    # ------------------------------
+    # 1. Checkout repository
+    # ------------------------------
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # ------------------------------------------------------------
-    # Step 2: Install system packages
-    # ------------------------------------------------------------
-    - name: Install system packages
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          python3 python3-pip python3-setuptools python3-wheel \
-          git unzip zip openjdk-17-jdk libffi-dev libssl-dev \
-          autoconf automake libtool pkg-config wget
-
-    # ------------------------------------------------------------
-    # Step 3: Install Python packages
-    # ------------------------------------------------------------
-    - name: Install Python tools
-      run: |
-        python3 -m pip install --upgrade pip
-        pip install cython==0.29.36 buildozer==1.5.0 python-for-android==2024.1.21
-
-    # ------------------------------------------------------------
-    # Step 4: Detect project folder (where buildozer.spec exists)
-    # ------------------------------------------------------------
+    # ------------------------------
+    # 2. Detect project directory (where buildozer.spec is)
+    # ------------------------------
     - name: Set Project Directory
       id: set_project_dir
       run: |
@@ -46,9 +27,9 @@ jobs:
         echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         echo "Project folder: $PROJECT_DIR"
 
-    # ------------------------------------------------------------
-    # Step 5: Prepare icons/presplash
-    # ------------------------------------------------------------
+    # ------------------------------
+    # 3. Prepare icons/presplash
+    # ------------------------------
     - name: Prepare icons/presplash
       run: |
         cd ${{ env.PROJECT_DIR }}
@@ -64,56 +45,22 @@ jobs:
           echo "No presplash found, skipping."
         fi
 
-    # ------------------------------------------------------------
-    # Step 6: Install Android SDK + cmdline-tools + NDK (FIXED)
-    # ------------------------------------------------------------
-    - name: Install Android SDK + NDK
+    # ------------------------------
+    # 4. Build APK using Docker (official Buildozer image)
+    # ------------------------------
+    - name: Build APK with Buildozer (Docker)
       run: |
-        ANDROIDSDK="$HOME/android-sdk"
-        mkdir -p "$ANDROIDSDK/cmdline-tools/latest"
-        mkdir -p "$ANDROIDSDK/platform-tools"
+        docker pull kivy/buildozer:python3.11-android
+        docker run --rm \
+          -v ${{ github.workspace }}/${{ env.PROJECT_DIR }}:/app \
+          -w /app \
+          kivy/buildozer:python3.11-android \
+          buildozer android debug
 
-        cd "$ANDROIDSDK/cmdline-tools"
-
-        # Download and unzip command-line tools
-        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
-        unzip -q tools.zip
-        rm tools.zip
-
-        # Move files to latest folder
-        mv cmdline-tools/* latest/ || true
-
-        # Make sdkmanager executable
-        chmod +x latest/bin/sdkmanager
-
-        # Set environment variables
-        echo "ANDROIDSDK=$ANDROIDSDK" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$ANDROIDSDK" >> $GITHUB_ENV
-        echo "ANDROID_NDK_HOME=$ANDROIDSDK/ndk/25.1.8937393" >> $GITHUB_ENV
-        echo "PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$ANDROIDSDK/platform-tools:$PATH" >> $GITHUB_ENV
-
-        # Accept licenses and install required packages using full path
-        yes | $ANDROIDSDK/cmdline-tools/latest/bin/sdkmanager --licenses
-        $ANDROIDSDK/cmdline-tools/latest/bin/sdkmanager \
-          "platform-tools" \
-          "build-tools;36.1.0" \
-          "platforms;android-33" \
-          "ndk;25.1.8937393"
-
-    # ------------------------------------------------------------
-    # Step 7: Build APK
-    # ------------------------------------------------------------
-    - name: Build Kilimo360 APK
-      env:
-        ANDROIDSDK: ${{ env.ANDROID_SDK_ROOT }}
-      run: |
-        cd ${{ env.PROJECT_DIR }}
-        buildozer android debug
-
-    # ------------------------------------------------------------
-    # Step 8: Upload APK artifact
-    # ------------------------------------------------------------
-    - name: Upload APK artifact
+    # ------------------------------
+    # 5. Upload the APK artifact
+    # ------------------------------
+    - name: Upload Kilimo360 APK
       uses: actions/upload-artifact@v4
       with:
         name: Kilimo360-apk
