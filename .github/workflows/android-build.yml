@@ -29,7 +29,7 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Python dependencies
+    - name: Install Buildozer and Dependencies
       run: |
         python -m pip install --upgrade pip
         pip install cython==0.29.36
@@ -50,33 +50,23 @@ jobs:
           echo "No presplash found, skipping."
         fi
 
-    - name: Install Android SDK Command-Line Tools
+    - name: Install Android SDK and Command-Line Tools
       run: |
-        export ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk
+        ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk
         mkdir -p $ANDROIDSDK/cmdline-tools
         cd $ANDROIDSDK/cmdline-tools
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
         unzip -q cmdline-tools.zip
         mv cmdline-tools latest
         rm cmdline-tools.zip
-
-        # Add cmdline-tools to PATH
         export PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$PATH
-
-        # Accept licenses
         yes | sdkmanager --licenses
-
-        # Install required packages
         sdkmanager "platform-tools" "platforms;android-33" "build-tools;36.1.0"
 
     - name: Build APK
       run: |
         cd ${{ env.PROJECT_DIR }}
-
-        # Set Buildozer environment variables
-        export ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk
-        export ANDROIDNDK=$HOME/.buildozer/android/platform/android-ndk-r25b
+        ANDROIDSDK=$HOME/.buildozer/android/platform/android-sdk
+        ANDROIDNDK=$HOME/.buildozer/android/platform/android-ndk-r25b
         export PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$PATH
-
-        # Force Buildozer to use this SDK location
         buildozer android debug --sdk-dir $ANDROIDSDK --ndk-dir $ANDROIDNDK
