@@ -1,62 +1,77 @@
-name: Android Build
+name: Build APK
 
 on:
   push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      ANDROID_HOME: $HOME/android-sdk
-      ANDROID_SDK_ROOT: $HOME/android-sdk
-      JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
 
     steps:
-    - name: Checkout
+    - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Locate project folder
+    - name: Install system packages
       run: |
-        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1)
-        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-        echo "Project folder: $PROJECT_DIR"
+        sudo apt-get update
+        sudo apt-get install -y \
+          python3 python3-pip python3-setuptools python3-wheel \
+          git unzip zip openjdk-17-jdk libffi-dev libssl-dev \
+          autoconf automake libtool pkg-config
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
-
-    - name: Install pip dependencies
+    - name: Install Python tools
       run: |
         pip install --upgrade pip
         pip install cython buildozer python-for-android
 
-    - name: Install Android Command-line Tools
+    # ------------------------------------------------------------
+    #  ANDROID SDK + NDK — FULL FIX FOR sdkmanager NOT FOUND
+    # ------------------------------------------------------------
+    - name: Install Android SDK + cmdline-tools + NDK
       run: |
-        mkdir -p $ANDROID_HOME/cmdline-tools
-        cd $ANDROID_HOME/cmdline-tools
-        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O tools.zip
+        ANDROIDSDK="$HOME/android-sdk"
+        mkdir -p "$ANDROIDSDK/cmdline-tools"
+
+        cd "$ANDROIDSDK/cmdline-tools"
+
+        echo "Downloading Android commandline tools..."
+        wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
         unzip -q tools.zip
-        mv cmdline-tools latest
 
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+        # Force correct folder structure expected by sdkmanager
+        rm -rf latest
+        mkdir latest
+        mv cmdline-tools/* latest/ || true
+        rm -rf cmdline-tools tools.zip
 
-        # FIRST license pass
-        yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
+        echo "ANDROID_HOME=$ANDROIDSDK" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROIDSDK" >> $GITHUB_ENV
+        echo "PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$ANDROIDSDK/platform-tools:$ANDROIDSDK/emulator:$PATH" >> $GITHUB_ENV
 
-        # Install ONLY stable versions p4a supports
-        sdkmanager --sdk_root=$ANDROID_HOME \
-          "platform-tools" \
-          "build-tools;34.0.0" \
-          "platforms;android-33"
-
-        # SECOND license pass (Google requires double accept for new packages)
-        yes | sdkmanager --sdk_root=$ANDROID_HOME --licenses || true
-
-    - name: Build APK
+    - name: Accept Android Licenses
       run: |
-        cd ${{ env.PROJECT_DIR }}
-        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+        yes | sdkmanager --licenses || true
+
+    - name: Install SDK/NDK Packages
+      run: |
+        sdkmanager "platform-tools" \
+                   "build-tools;36.1.0" \
+                   "platforms;android-34" \
+                   "ndk;25.1.8937393" \
+                   "patcher;v4" || true
+
+    # ------------------------------------------------------------
+    #  BUILD AP​​K
+    # ------------------------------------------------------------
+    - name: Build APK with Buildozer
+      env:
+        ANDROIDSDK: ${{ env.ANDROID_SDK_ROOT }}
+      run: |
         buildozer android debug
+
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-apk
+        path: bin/*.apk
