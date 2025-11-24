@@ -7,54 +7,117 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_API: 34
+      ANDROID_MIN_API: 21
+      ANDROID_NDK: r25b
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v3
 
+    # -----------------------------
+    # System packages
+    # -----------------------------
     - name: Install system packages
       run: |
         sudo apt-get update
-        sudo apt-get install -y python3-pip unzip zip openjdk-17-jdk libffi-dev libssl-dev autoconf automake libtool pkg-config
+        sudo apt-get install -y \
+          python3 python3-pip python3-setuptools python3-wheel \
+          git unzip zip openjdk-17-jdk libffi-dev libssl-dev \
+          autoconf automake libtool pkg-config wget
 
+    # -----------------------------
+    # Python packages
+    # -----------------------------
     - name: Install Python tools
       run: |
         pip install --upgrade pip
-        pip install cython buildozer python-for-android
+        pip install cython==0.29.36 buildozer==1.5.0 python-for-android==2024.1.21
 
-    # ------------------------------------------------------------
-    #  INSTALL ANDROID SDK/NDK AND ACCEPT LICENSES
-    # ------------------------------------------------------------
-    - name: Install Android SDK + cmdline-tools
+    # -----------------------------
+    # Detect Project Directory
+    # -----------------------------
+    - name: Set Project Directory
+      id: set_project_dir
       run: |
-        export ANDROID_SDK_ROOT="$HOME/android-sdk"
-        mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
-        cd "$ANDROID_SDK_ROOT/cmdline-tools"
+        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1 | sed 's|^\./||')
+        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+        echo "Project folder: $PROJECT_DIR"
+
+    # -----------------------------
+    # Prepare icons/presplash
+    # -----------------------------
+    - name: Prepare icons/presplash
+      run: |
+        cd ${{ env.PROJECT_DIR }}
+        echo "Checking icons/presplash..."
+        if [ -f "./assets/default_icon.png" ]; then
+          echo "Icon exists, OK"
+        else
+          echo "No icon found, skipping."
+        fi
+        if [ -f "./assets/default_presplash.png" ]; then
+          echo "Presplash exists, OK"
+        else
+          echo "No presplash found, skipping."
+        fi
+
+    # -----------------------------
+    # Android SDK + NDK
+    # -----------------------------
+    - name: Install Android SDK + cmdline-tools + NDK
+      run: |
+        ANDROIDSDK="$HOME/android-sdk"
+        mkdir -p "$ANDROIDSDK/cmdline-tools"
+
+        cd "$ANDROIDSDK/cmdline-tools"
+        echo "Downloading Android commandline tools..."
         wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O tools.zip
         unzip -q tools.zip
-        mv cmdline-tools/* latest/
+
+        # Force correct folder structure
+        rm -rf latest
+        mkdir latest
+        mv cmdline-tools/* latest/ || true
         rm -rf cmdline-tools tools.zip
 
-        export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+        echo "ANDROID_HOME=$ANDROIDSDK" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROIDSDK" >> $GITHUB_ENV
+        echo "PATH=$ANDROIDSDK/cmdline-tools/latest/bin:$ANDROIDSDK/platform-tools:$ANDROIDSDK/emulator:$PATH" >> $GITHUB_ENV
 
-        # Accept all licenses
-        yes | sdkmanager --licenses
-
-        # Install required SDK/NDK/Build-tools
-        sdkmanager "platform-tools" "build-tools;36.1.0" "platforms;android-34" "ndk;25.1.8937393" "patcher;v4"
-
-        echo "ANDROIDSDK=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
-        echo "ANDROIDNDK=$ANDROID_SDK_ROOT/ndk/25.1.8937393" >> $GITHUB_ENV
-        echo "PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH" >> $GITHUB_ENV
-
-    # ------------------------------------------------------------
-    #  BUILD APK WITH BUILDOZER
-    # ------------------------------------------------------------
-    - name: Build APK
-      env:
-        ANDROIDSDK: ${{ env.ANDROIDSDK }}
-        ANDROIDNDK: ${{ env.ANDROIDNDK }}
-        ANDROID_HOME: ${{ env.ANDROIDSDK }}
-        PATH: ${{ env.ANDROIDSDK }}/cmdline-tools/latest/bin:${{ env.ANDROIDSDK }}/platform-tools:$PATH
+    # -----------------------------
+    # Accept all SDK licenses
+    # -----------------------------
+    - name: Accept Android Licenses
       run: |
+        yes | sdkmanager --licenses || true
+
+    # -----------------------------
+    # Install SDK/NDK packages
+    # -----------------------------
+    - name: Install SDK/NDK Packages
+      run: |
+        sdkmanager "platform-tools" \
+                   "build-tools;36.1.0" \
+                   "platforms;android-34" \
+                   "ndk;25.1.8937393" || true
+
+    # -----------------------------
+    # Build APK
+    # -----------------------------
+    - name: Build APK with Buildozer
+      env:
+        ANDROIDSDK: ${{ env.ANDROID_SDK_ROOT }}
+      run: |
+        cd ${{ env.PROJECT_DIR }}
         buildozer android debug
+
+    # -----------------------------
+    # Upload APK artifact
+    # -----------------------------
+    - name: Upload APK artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-apk
+        path: bin/*.apk
