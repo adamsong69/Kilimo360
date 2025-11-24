@@ -1,4 +1,4 @@
-name: Android Build
+name: Build Kilimo360 APK
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-android:
     runs-on: ubuntu-latest
 
     env:
@@ -16,66 +16,36 @@ jobs:
       ANDROID_NDK: r25b
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - name: Find project folder
-        id: project
-        run: |
-          PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | grep -v '^.$' | head -n 1 | sed 's|^\./||')
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-          echo "Project folder: $PROJECT_DIR"
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+        python -m pip install --upgrade pip
+        pip install buildozer==1.5.0 python-for-android==2024.1.21
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install buildozer==1.5.1 python-for-android==2024.1.21
+    - name: Locate project directory
+      id: project_dir
+      run: |
+        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n1)
+        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+        echo "Project folder: $PROJECT_DIR"
 
-      - name: Setup Android SDK & NDK
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk unzip wget
-          mkdir -p $HOME/Android/Sdk
-          cd $HOME/Android/Sdk
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip cmdline-tools.zip
-          rm cmdline-tools.zip
-          mkdir -p cmdline-tools/latest
-          mv cmdline-tools/* cmdline-tools/latest/
-          yes | cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/Android/Sdk "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
+    - name: Build APK
+      run: |
+        source venv/bin/activate
+        cd $PROJECT_DIR
+        buildozer android debug
 
-      - name: Prepare buildozer environment
-        run: |
-          cd $PROJECT_DIR
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          pip install buildozer==1.5.1 python-for-android==2024.1.21
-
-      - name: Fix icon and presplash
-        run: |
-          cd $PROJECT_DIR
-          if [ -f "assets/icon.png" ]; then
-            cp assets/icon.png $PROJECT_DIR/icon.png
-          fi
-          if [ -f "assets/presplash.png" ]; then
-            cp assets/presplash.png $PROJECT_DIR/presplash.png
-          fi
-
-      - name: Build APK
-        run: |
-          cd $PROJECT_DIR
-          source venv/bin/activate
-          buildozer android debug
-
-      - name: Upload APK artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Kilimo360-APK
-          path: $PROJECT_DIR/bin/*.apk
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kilimo360-APK
+        path: ${{ steps.project_dir.outputs.PROJECT_DIR }}/bin/*.apk
