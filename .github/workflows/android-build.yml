@@ -24,7 +24,7 @@ jobs:
       - name: Find project folder
         id: project
         run: |
-          PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \;)
+          PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | sed 's|^\./||')
           echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
           echo "Project folder: $PROJECT_DIR"
 
