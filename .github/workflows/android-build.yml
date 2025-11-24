@@ -35,10 +35,12 @@ jobs:
         echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         echo "Project folder: $PROJECT_DIR"
 
-    - name: Install Android SDK & dependencies
+    - name: Prepare icons and presplash
       run: |
-        buildozer android sdk update
-      working-directory: ${{ env.PROJECT_DIR }}
+        echo "Checking and copying icons/presplash..."
+        # Ensure default icon.png and presplash.png exist
+        [ -f ${{ env.PROJECT_DIR }}/assets/icon.png ] || cp ${{ env.PROJECT_DIR }}/assets/default_icon.png ${{ env.PROJECT_DIR }}/assets/icon.png
+        [ -f ${{ env.PROJECT_DIR }}/assets/presplash.png ] || cp ${{ env.PROJECT_DIR }}/assets/default_presplash.png ${{ env.PROJECT_DIR }}/assets/presplash.png
 
     - name: Build APK
       run: |
