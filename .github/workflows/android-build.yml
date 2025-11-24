@@ -11,15 +11,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # ------------------------------
-    # 1. Checkout repository
-    # ------------------------------
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    # ------------------------------
-    # 2. Detect project directory (where buildozer.spec is)
-    # ------------------------------
     - name: Set Project Directory
       id: set_project_dir
       run: |
@@ -27,9 +21,6 @@ jobs:
         echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         echo "Project folder: $PROJECT_DIR"
 
-    # ------------------------------
-    # 3. Prepare icons/presplash
-    # ------------------------------
     - name: Prepare icons/presplash
       run: |
         cd ${{ env.PROJECT_DIR }}
@@ -45,21 +36,15 @@ jobs:
           echo "No presplash found, skipping."
         fi
 
-    # ------------------------------
-    # 4. Build APK using Docker (official Buildozer image)
-    # ------------------------------
     - name: Build APK with Buildozer (Docker)
       run: |
-        docker pull kivy/buildozer:python3.11-android
+        docker pull kivy/buildozer:latest
         docker run --rm \
-          -v ${{ github.workspace }}/${{ env.PROJECT_DIR }}:/app \
-          -w /app \
-          kivy/buildozer:python3.11-android \
+          -v ${{ github.workspace }}/${{ env.PROJECT_DIR }}:/home/user/hostcwd \
+          -w /home/user/hostcwd \
+          kivy/buildozer:latest \
           buildozer android debug
 
-    # ------------------------------
-    # 5. Upload the APK artifact
-    # ------------------------------
     - name: Upload Kilimo360 APK
       uses: actions/upload-artifact@v4
       with:
