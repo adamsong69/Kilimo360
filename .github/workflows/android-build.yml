@@ -21,29 +21,17 @@ jobs:
         echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
         echo "Project folder: $PROJECT_DIR"
 
-    - name: Prepare icons/presplash
-      run: |
-        cd ${{ env.PROJECT_DIR }}
-        echo "Checking icons/presplash..."
-        if [ -f "./assets/default_icon.png" ]; then
-          echo "Icon exists, OK"
-        else
-          echo "No icon found, skipping."
-        fi
-        if [ -f "./assets/default_presplash.png" ]; then
-          echo "Presplash exists, OK"
-        else
-          echo "No presplash found, skipping."
-        fi
-
-    - name: Build APK with Buildozer (Docker)
+    - name: Pull Kivy Buildozer Docker
       run: |
         docker pull kivy/buildozer:latest
+
+    - name: Build APK using Docker
+      run: |
         docker run --rm \
           -v ${{ github.workspace }}/${{ env.PROJECT_DIR }}:/home/user/hostcwd \
           -w /home/user/hostcwd \
           kivy/buildozer:latest \
-          buildozer android debug
+          sh -c "buildozer android debug"
 
     - name: Upload Kilimo360 APK
       uses: actions/upload-artifact@v4
