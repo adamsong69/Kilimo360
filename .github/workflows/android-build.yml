@@ -1,4 +1,4 @@
-name: Build Kilimo360 APK
+name: Android Build
 
 on:
   push:
@@ -7,70 +7,67 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-android:
+  build:
     runs-on: ubuntu-latest
     env:
       ANDROID_API: 33
       ANDROID_MIN_API: 21
       ANDROID_NDK: r25b
+      ANDROID_HOME: $HOME/android-sdk
+      PATH: $HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$PATH
 
     steps:
-    # Step 1: Checkout the repo
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Step 2: Setup Python
-    - name: Setup Python 3.11
+    - name: Set Project Directory
+      run: |
+        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \; | head -n 1 | sed 's|^\./||')
+        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+        echo "Project folder: $PROJECT_DIR"
+
+    - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    # Step 3: Install system dependencies
-    - name: Install system dependencies
+    - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-venv python3-dev git zip unzip build-essential
-
-    # Step 4: Create and activate virtualenv
-    - name: Setup virtual environment
-      run: |
-        python3 -m venv venv
-        source venv/bin/activate
         python -m pip install --upgrade pip
-        pip install buildozer==1.5.0 python-for-android==2024.1.21 Cython
+        pip install cython==0.29.36 buildozer==1.5.0 python-for-android==2024.1.21
 
-    # Step 5: Detect project folder
-    - name: Detect project folder
+    - name: Install Android SDK Command-Line Tools
       run: |
-        PROJECT_DIR=$(find . -name "buildozer.spec" -exec dirname {} \;)
-        echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
-        echo "Detected project folder: $PROJECT_DIR"
+        mkdir -p $HOME/android-sdk/cmdline-tools
+        cd $HOME/android-sdk/cmdline-tools
+        wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+        unzip cmdline-tools.zip
+        mv cmdline-tools latest
+        yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+        $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-${{ env.ANDROID_API }}" "build-tools;36.1.0"
 
-    # Step 6: Handle missing icons/presplash
-    - name: Check and copy icons/presplash
+    - name: Prepare icons/presplash
       run: |
         cd ${{ env.PROJECT_DIR }}
-        if [ ! -f ./assets/default_icon.png ]; then
-          echo "No default_icon.png found, skipping icon copy..."
+        echo "Checking icons/presplash..."
+        if [ -f "./assets/default_icon.png" ]; then
+          echo "Icon exists, OK"
         else
-          echo "Copying default_icon.png..."
-          cp ./assets/default_icon.png ./buildozer/icon.png
+          echo "No icon found, skipping."
         fi
-        if [ ! -f ./assets/default_presplash.png ]; then
-          echo "No default_presplash.png found, skipping presplash copy..."
+        if [ -f "./assets/default_presplash.png" ]; then
+          echo "Presplash exists, OK"
         else
-          echo "Copying default_presplash.png..."
-          cp ./assets/default_presplash.png ./buildozer/presplash.png
+          echo "No presplash found, skipping."
         fi
 
-    # Step 7: Accept Android SDK licenses automatically
-    - name: Accept Android SDK licenses
-      run: |
-        yes | $HOME/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
-
-    # Step 8: Run Buildozer to build APK
     - name: Build APK
       run: |
         cd ${{ env.PROJECT_DIR }}
-        source ../venv/bin/activate
         buildozer android debug
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Kilimo360-APK
+        path: ${{ env.PROJECT_DIR }}/bin/*.apk
